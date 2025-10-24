@@ -1,0 +1,54 @@
+name: publish-catalogue
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish-catalogue
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: run tests
+        run: go test ./...
+
+      - name: generate catalogue
+        env:
+          BASE_URL: ${{ vars.UTILS_BASE_URL }}
+        run: |
+          base="${BASE_URL:-https://utils.rselbach.com}"
+          go run ./cmd/catalog -base-url "${base}" -out site/index.html
+
+      - name: upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
